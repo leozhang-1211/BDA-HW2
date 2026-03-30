@@ -24,7 +24,7 @@ def get_ai_insight(ticker, price, btc_price, holdings, premium_pct, _api_key):
         請用繁體中文簡述目前市場的情緒與投資風險。
         """
         response = client.models.generate_content(
-            model="gemini-1.5-flash",
+            model="gemini-2.0-flash-lite",
             contents=prompt
         )
         return response.text
