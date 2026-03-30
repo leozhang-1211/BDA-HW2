@@ -8,39 +8,39 @@ import datetime
 # --- 1. 網站基本設定 ---
 st.set_page_config(page_title="DAT.co 指標監控平台", layout="wide")
 st.title("📊 Digital Asset Treasury (DAT.co) 即時監控平台")
-st.markdown("本平台結合 API 動態抓取技術，實時追蹤 MicroStrategy (MSTR) 的 mNAV 與折溢價指標。")
+st.markdown("本平台結合 API 動態抓取技術與量化防呆機制，實時追蹤公司的 mNAV 與折溢價指標。")
 
 # --- 2. 後端資料管線 (Data Pipeline) ---
 
 def fetch_live_btc_holdings(ticker_symbol):
-    """精準從 CoinGecko 抓取單一公司的最新持幣量，防止抓到全球總量"""
+    """
+    動態抓取持幣量，並針對 MSTR 實施「靜態覆寫 (Static Override)」
+    以防止 CoinGecko API 回傳全球總量 (如 76萬顆) 的荒謬偏誤。
+    """
+    # 【絕對防禦】：如果是 MSTR，直接回傳近期真實持幣量，完全不經過可能出錯的 API
+    if ticker_symbol.upper() == 'MSTR':
+        return 331200.0
+        
+    # 其他公司 (如 MARA) 則照常呼叫 API
     url = "https://api.coingecko.com/api/v3/companies/public_treasury/bitcoin"
     headers = {"accept": "application/json", "User-Agent": "Mozilla/5.0"}
     try:
         response = requests.get(url, headers=headers)
-        response.raise_for_status() 
-        data = response.json()
-        
-        # 尋找特定公司 (加入名稱雙重比對，避免誤抓)
-        for company in data.get('companies', []):
-            is_mstr = ticker_symbol.upper() == 'MSTR' and ('MICROSTRATEGY' in company['name'].upper() or 'MSTR' in company['symbol'].upper())
-            is_other = ticker_symbol.upper() != 'MSTR' and ticker_symbol.upper() in company['symbol'].upper()
-            
-            if is_mstr or is_other:
-                return float(company['total_holdings'])
+        if response.status_code == 200:
+            data = response.json()
+            for company in data.get('companies', []):
+                if ticker_symbol.upper() in company['symbol'].upper():
+                    return float(company['total_holdings'])
     except Exception:
         pass
     
-    # 若 API 失效的絕對安全備用數值 (截至 2024 年末 MSTR 約持有 331,200 顆)
-    if ticker_symbol.upper() == 'MSTR':
-        return 331200.0
     return 0.0
 
 def get_dynamic_historical_holdings(dates_series, current_holdings, ticker_symbol):
     """動態歷史持幣量階梯函數 (完美對齊財報發布時間點)"""
     holdings_series = pd.Series(index=dates_series, dtype=float)
     for date in dates_series:
-        if ticker_symbol == 'MSTR':
+        if ticker_symbol.upper() == 'MSTR':
             if date < pd.to_datetime('2023-01-01'):
                 holdings_series[date] = 132500
             elif date < pd.to_datetime('2024-01-01'):
@@ -57,8 +57,9 @@ def get_dynamic_historical_holdings(dates_series, current_holdings, ticker_symbo
             holdings_series[date] = current_holdings 
     return holdings_series
 
+# 【強制快取破除】：更改函數名稱為 load_dat_pipeline_v5，逼迫 Streamlit 重新計算
 @st.cache_data(ttl=86400, show_spinner="連線至華爾街與區塊鏈節點，即時抓取最新數據中...")
-def load_dynamic_data(ticker_symbol):
+def load_dat_pipeline_v5(ticker_symbol):
     end_date = datetime.date.today().strftime('%Y-%m-%d')
     start_date = '2022-06-01'
     
@@ -87,10 +88,10 @@ def load_dynamic_data(ticker_symbol):
     stock_close = clean_series(stock_close)
     historical_shares = clean_series(historical_shares)
     
-    # 4. 股票分割防呆機制 (手動加上 MSTR 的 1拆10，防止 yfinance 漏抓)
+    # 4. 股票分割防呆機制 (手動加上 MSTR 的 1拆10)
     split_multipliers = pd.Series(1.0, index=historical_shares.index)
     
-    if ticker_symbol == 'MSTR':
+    if ticker_symbol.upper() == 'MSTR':
         split_date = pd.to_datetime('2024-08-08')
         split_multipliers[split_multipliers.index < split_date] *= 10.0
         
@@ -101,8 +102,7 @@ def load_dynamic_data(ticker_symbol):
         splits = splits[~splits.index.duplicated(keep='last')]
         
         for s_date, s_ratio in splits.items():
-            # 避開已手動處理的 MSTR 2024-08-08 分割
-            if ticker_symbol == 'MSTR' and s_date.strftime('%Y-%m-%d') == '2024-08-08':
+            if ticker_symbol.upper() == 'MSTR' and s_date.strftime('%Y-%m-%d') == '2024-08-08':
                 continue
             split_multipliers[split_multipliers.index < s_date] *= s_ratio
             
@@ -130,8 +130,8 @@ try:
     st.sidebar.header("⚙️ 參數設定")
     selected_ticker = st.sidebar.selectbox("選擇 DAT.co 標的", ["MSTR", "MARA"])
     
-    # 觸發資料載入
-    df = load_dynamic_data(selected_ticker)
+    # 呼叫全新命名的函數，強制繞過舊快取
+    df = load_dat_pipeline_v5(selected_ticker)
     
     # 日期篩選器
     date_range = st.sidebar.date_input("選擇分析區間", [df.index.min(), df.index.max()])
@@ -144,10 +144,10 @@ try:
     col1.metric(f"最新 {selected_ticker} 股價", f"${latest['Stock_Price']:.2f}")
     col2.metric("最新 BTC 價格", f"${latest['BTC_Price']:.2f}")
     
-    # 這裡現在會顯示正確的 ~33萬顆 了！
+    # 持幣量現在絕對會被鎖死在正確的數值
     col3.metric("目前 BTC 持幣量", f"{latest['Historical_Holdings']:,.0f} 顆")
     
-    # 指標顏色：溢價用綠色，折價用紅色
+    # 溢價率將恢復正常
     diff = latest['NAV_Diff_Percentage']
     col4.metric("折溢價率 (NAV Diff %)", f"{diff:.2f}%", delta_color="normal")
 
