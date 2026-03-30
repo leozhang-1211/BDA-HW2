@@ -160,7 +160,7 @@ try:
                     api_key = st.secrets["GEMINI_API_KEY"]
                     genai.configure(api_key=api_key)
                     # 修正 404 報錯：使用支援的最新模型名稱
-                    model = genai.GenerativeModel('gemini-1.5-flash')
+                    model = genai.GenerativeModel('gemini-2.0-flash')
                     
                     prompt = f"""
                     你是一位專業量化分析師。分析標的：{selected_ticker}。
