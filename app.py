@@ -151,27 +151,46 @@ try:
         st.plotly_chart(fig2, use_container_width=True)
 
         # --- 4. AI 智能分析 (Bonus) ---
+        # --- 4. AI 智能分析 (優化快取版) ---
         st.markdown("---")
         st.subheader("🤖 AI 財經洞見分析")
+        
+        # 定義一個帶有快取的 AI 呼叫函數，避免重複按按鈕浪費額度
+        # 我們讓快取記住「代號」和「溢價率」，只要這兩個沒變，AI 就不會重新呼叫
+        @st.cache_data(ttl=3600) # 快取一小時
+        def get_ai_insight(ticker, price, btc_price, holdings, premium_pct, _api_key):
+            client = genai.Client(api_key=_api_key)
+            prompt = f"""
+            你是一位專業量化分析師。分析標的：{ticker}。
+            目前股價：${price:.2f}，BTC價格：${btc_price:.2f}，
+            持幣量：{holdings:,.0f}顆，折溢價率：{premium_pct:.2f}%。
+            請用繁體中文簡述目前市場的情緒與投資風險。
+            """
+            response = client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt
+            )
+            return response.text
+        
         if st.button("✨ 產生 AI 分析報告"):
-            with st.spinner("AI 分析師正在閱讀數據..."):
+            with st.spinner("AI 分析師正在研讀數據 (請稍候，免費版 API 可能有延遲)..."):
                 try:
-                    # 從 Secrets 安全讀取金鑰
                     api_key = st.secrets["GEMINI_API_KEY"]
-                    genai.configure(api_key=api_key)
-                    # 修正 404 報錯：使用支援的最新模型名稱
-                    model = genai.GenerativeModel('gemini-2.0-flash')
-                    
-                    prompt = f"""
-                    你是一位專業量化分析師。分析標的：{selected_ticker}。
-                    目前股價：${latest['Stock_Price']:.2f}，BTC價格：${latest['BTC_Price']:.2f}，
-                    持幣量：{latest['Historical_Holdings']:,.0f}顆，折溢價率：{latest['NAV_Diff_Percentage']:.2f}%。
-                    請用繁體中文簡述目前市場的情緒與投資風險。
-                    """
-                    response = model.generate_content(prompt)
-                    st.info(response.text)
+                    # 呼叫帶有快取的函數
+                    insight = get_ai_insight(
+                        selected_ticker, 
+                        latest['Stock_Price'], 
+                        latest['BTC_Price'], 
+                        latest['Historical_Holdings'], 
+                        diff, 
+                        api_key
+                    )
+                    st.info(insight)
                 except Exception as e:
-                    st.error(f"AI API 錯誤: {e}")
+                    if "429" in str(e):
+                        st.error("⚠️ 呼叫太頻繁了！Google API 免費版額度暫時用完，請等待 1 分鐘後再試。")
+                    else:
+                        st.error(f"AI API 錯誤: {e}")
 
 except Exception as e:
     st.error(f"系統錯誤: {e}")
