@@ -154,7 +154,7 @@ try:
                 # 從 Streamlit Secrets 讀取 API Key
                 api_key = st.secrets["GEMINI_API_KEY"]
                 genai.configure(api_key=api_key)
-                model = genai.GenerativeModel('gemini-1.5-flash')
+                model = genai.GenerativeModel('gemini-1.5-flash-latest')
                 
                 prompt = f"""
                 你現在是一位華爾街資深的加密貨幣與量化金融分析師。
