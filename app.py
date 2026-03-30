@@ -44,7 +44,6 @@ def get_dynamic_historical_holdings(dates_series, current_holdings, ticker_symbo
             # 若為其他公司，暫以最新持幣量估算
             holdings_series[date] = current_holdings 
     return holdings_series
-
 # 加上 st.cache_data 並設定 ttl=86400 (24小時)，確保每天自動更新且不爆 API Quota
 @st.cache_data(ttl=86400, show_spinner="連線至華爾街與區塊鏈節點，即時抓取最新數據中...")
 def load_dynamic_data(ticker_symbol):
@@ -62,14 +61,29 @@ def load_dynamic_data(ticker_symbol):
     historical_shares = ticker_obj.get_shares_full(start=start_date, end=end_date)
     splits = ticker_obj.splits
     
-    # 統一抹除時區與重複值
-    for series in [btc_close, stock_close, historical_shares]:
-        series.index = pd.to_datetime(series.index).tz_localize(None)
-        series = series[~series.index.duplicated(keep='last')]
+    # --- 關鍵修正：安全清洗資料函數 ---
+    def clean_series(s):
+        if s is None or s.empty:
+            return s
+        # 1. 強制轉為 DatetimeIndex
+        s.index = pd.DatetimeIndex(s.index)
+        # 2. 安全移除時區
+        if s.index.tz is not None:
+            s.index = s.index.tz_localize(None)
+        # 3. 去除重複日期 (保留最新值)
+        s = s[~s.index.duplicated(keep='last')]
+        return s
+
+    # 獨立清洗每一個變數，避免 Python 迴圈變數未更新的陷阱
+    btc_close = clean_series(btc_close)
+    stock_close = clean_series(stock_close)
+    historical_shares = clean_series(historical_shares)
     
     # 處理股票分割乘數
     if not splits.empty:
-        splits.index = pd.to_datetime(splits.index).tz_localize(None)
+        splits.index = pd.DatetimeIndex(splits.index)
+        if splits.index.tz is not None:
+            splits.index = splits.index.tz_localize(None)
         splits = splits[~splits.index.duplicated(keep='last')]
     
     split_multipliers = pd.Series(1.0, index=historical_shares.index)
