@@ -9,7 +9,7 @@ from google import genai
 # --- 1. 網站基本設定 ---
 st.set_page_config(page_title="DAT.co 指標監控平台", layout="wide")
 st.title("📊 Digital Asset Treasury (DAT.co) 即時監控平台")
-st.markdown("本平台結合 2.0 世代 AI 與量化防呆機制，實時追蹤公司的 mNAV 與折溢價指標。")
+st.markdown("本平台結合google AI報告與量化機制，實時追蹤MSTR和MARA的 mNAV 與折溢價指標。")
 
 # --- 2. 後端資料管線 ---
 
