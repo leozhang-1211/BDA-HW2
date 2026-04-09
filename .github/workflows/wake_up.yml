@@ -1,14 +1,22 @@
-name: Continuous Wake Up
+name: Wake up Streamlit App
+
 on:
   schedule:
-    - cron: '0 0 */2 * *' # 每兩天執行一次，確保不會觸發 7 天休眠
-  workflow_dispatch:      # 允許手動執行測試
+    # 每天凌晨 00:00 與 中午 12:00 (UTC) 執行，保證每 12 小時喚醒一次
+    - cron: '0 0,12 * * *'
+  workflow_dispatch: # 讓你可以手動按按鈕測試
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
-      - name: Open Streamlit App
+      - name: Open Streamlit App with User-Agent
         run: |
-          # 使用 curl 並模擬常見瀏覽器的 User-Agent
-          curl -A "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" -L https://your-app-url.streamlit.app
+          # 換成你自己的 Streamlit 網址
+          APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app"
+          
+          # 模擬真正的 Chrome 瀏覽器請求標頭
+          curl -I -L -X GET "$APP_URL" \
+          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" \
+          -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
+          --retry 3
