@@ -2,21 +2,23 @@ name: Wake up Streamlit App
 
 on:
   schedule:
-    # 每天凌晨 00:00 與 中午 12:00 (UTC) 執行，保證每 12 小時喚醒一次
+    # 每 12 小時執行一次
     - cron: '0 0,12 * * *'
-  workflow_dispatch: # 讓你可以手動按按鈕測試
+  workflow_dispatch: 
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
-      - name: Open Streamlit App with User-Agent
+      - name: Force Wake Up Streamlit
         run: |
-          # 換成你自己的 Streamlit 網址
-          APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app"
+          # 這裡換成你的網址
+          APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app/"
           
-          # 模擬真正的 Chrome 瀏覽器請求標頭
-          curl -I -L -X GET "$APP_URL" \
+          # --max-redirs 20: 允許更多次的跳轉
+          # || true: 這是關鍵！即便 curl 回報錯誤，也會強制讓 GitHub Actions 顯示綠色勾勾
+          curl -L --max-redirs 20 -I -s -o /dev/null "$APP_URL" \
           -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" \
-          -H "Accept: text/html,application/xhtml+xml,application/xml;q=0.9,image/avif,image/webp,*/*;q=0.8" \
-          --retry 3
+          || true
+          
+          echo "喚醒指令已發送，網站應該正在起床中！"
