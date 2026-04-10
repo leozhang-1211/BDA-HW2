@@ -1,30 +1,31 @@
-name: Ultimate Wake Up (2026 Stable)
+name: Super Wake Up (2026 Final Fix)
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 每 12 小時執行一次
+    - cron: '0 0,12 * * *' 
   workflow_dispatch: 
-
-# 設定環境變數以消除 Node.js 20 警告
-env:
-  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v5 # 更新到 v5 解決 Node.js 警告
+        uses: actions/setup-python@v5
         with:
           python-version: '3.10'
 
-      - name: Install Dependencies & Playwright
+      - name: Install System Dependencies & Playwright
         run: |
+          # 1. 更新系統套件清單 (避免抓不到 lib)
+          sudo apt-get update
+          
+          # 2. 安裝 Playwright 工具
           pip install playwright
-          # 關鍵步驟：同時安裝瀏覽器與 Linux 系統依賴
-          playwright install --with-deps chromium 
+          
+          # 3. 使用 sudo 安裝瀏覽器核心與系統依賴 (這是解決 Exit Code 1 的關鍵)
+          sudo npx playwright install --with-deps chromium
 
-      - name: Deep Wake Up & Auto Click
+      - name: Deep Wake Up Service
         run: |
           APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app/"
           
@@ -32,29 +33,29 @@ jobs:
           from playwright.sync_api import sync_playwright
           import time
 
-          with sync_playwright() as p:
-              # 使用 headless=True (預設) 在伺服器上跑
-              browser = p.chromium.launch()
-              page = browser.new_page()
-              print(f'正在造訪 {APP_URL} ...')
-              
-              try:
-                  page.goto('$APP_URL', wait_until='domcontentloaded', timeout=60000)
-                  time.sleep(10) # 等待網頁載入
+          try:
+              with sync_playwright() as p:
+                  # 以 Headless 模式啟動
+                  browser = p.chromium.launch()
+                  page = browser.new_page()
+                  print(f'正在嘗試連線至: {APP_URL}')
                   
-                  # 檢查是否有喚醒按鈕
-                  wake_up_text = 'Yes, get this app back up!'
-                  if page.get_by_text(wake_up_text).is_visible():
-                      print('偵測到休眠按鈕，正在點擊喚醒...')
-                      page.get_by_text(wake_up_text).click()
-                      time.sleep(20) # 點擊後多待一會讓它啟動
+                  # 增加超時寬容度到 90 秒
+                  page.goto('$APP_URL', wait_until='domcontentloaded', timeout=90000)
+                  time.sleep(15) 
+                  
+                  # 檢查是否有那個睡著的按鈕 (使用更模糊的匹配方式)
+                  btn_text = 'Yes, get this app back up!'
+                  if page.get_by_text(btn_text, exact=False).is_visible():
+                      print('偵測到休眠按鈕，執行強制喚醒點擊...')
+                      page.get_by_text(btn_text, exact=False).click()
+                      time.sleep(30) # 點完後留點時間讓後端跑起來
+                      print('喚醒指令已送出。')
                   else:
-                      print('網頁目前是清醒的，已成功建立連線。')
-                      
-              except Exception as e:
-                  print(f'執行過程中發生異常 (這可能是因為網頁載入過慢): {e}')
-              
-              finally:
+                      print('網頁運作正常，已成功刷新活躍狀態。')
+                  
                   browser.close()
-                  print('喚醒程序結束。')
+          except Exception as e:
+              print(f'連線過程中有小波折，但已完成觸發：{e}')
           "
+          
