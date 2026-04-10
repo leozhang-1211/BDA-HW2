@@ -1,24 +1,40 @@
-name: Wake up Streamlit App
+name: Super Wake Up (Playwright)
 
 on:
   schedule:
-    # 每 12 小時執行一次
-    - cron: '0 0,12 * * *'
+    - cron: '0 0,12 * * *' # 每 12 小時一次
   workflow_dispatch: 
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
-      - name: Force Wake Up Streamlit
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+
+      - name: Install Playwright
         run: |
-          # 這裡換成你的網址
+          pip install playwright
+          playwright install chromium
+
+      - name: Deep Wake Up Streamlit
+        run: |
+          # 換成你的 App 網址
           APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app/"
           
-          # --max-redirs 20: 允許更多次的跳轉
-          # || true: 這是關鍵！即便 curl 回報錯誤，也會強制讓 GitHub Actions 顯示綠色勾勾
-          curl -L --max-redirs 20 -I -s -o /dev/null "$APP_URL" \
-          -H "User-Agent: Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/110.0.0.0 Safari/537.36" \
-          || true
-          
-          echo "喚醒指令已發送，網站應該正在起床中！"
+          # 使用 Python 啟動虛擬瀏覽器，進去等 10 秒讓 WebSocket 連線
+          python -c "
+          from playwright.sync_api import sync_playwright
+          import time
+
+          with sync_playwright() as p:
+              browser = p.chromium.launch()
+              page = browser.new_page()
+              print(f'正在造訪 {APP_URL} ...')
+              page.goto('$APP_URL', wait_until='networkidle')
+              time.sleep(10) # 待久一點，確保後端真的被喚醒
+              print('網頁已成功加載，WebSocket 應已連線。')
+              browser.close()
+          "
