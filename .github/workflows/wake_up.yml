@@ -1,40 +1,60 @@
-name: Super Wake Up (Playwright)
+name: Ultimate Wake Up (2026 Stable)
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' # 每 12 小時一次
+    - cron: '0 0,12 * * *' # 每 12 小時執行一次
   workflow_dispatch: 
+
+# 設定環境變數以消除 Node.js 20 警告
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   wake_up:
     runs-on: ubuntu-latest
     steps:
       - name: Setup Python
-        uses: actions/setup-python@v4
+        uses: actions/setup-python@v5 # 更新到 v5 解決 Node.js 警告
         with:
-          python-version: '3.9'
+          python-version: '3.10'
 
-      - name: Install Playwright
+      - name: Install Dependencies & Playwright
         run: |
           pip install playwright
-          playwright install chromium
+          # 關鍵步驟：同時安裝瀏覽器與 Linux 系統依賴
+          playwright install --with-deps chromium 
 
-      - name: Deep Wake Up Streamlit
+      - name: Deep Wake Up & Auto Click
         run: |
-          # 換成你的 App 網址
           APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app/"
           
-          # 使用 Python 啟動虛擬瀏覽器，進去等 10 秒讓 WebSocket 連線
           python -c "
           from playwright.sync_api import sync_playwright
           import time
 
           with sync_playwright() as p:
+              # 使用 headless=True (預設) 在伺服器上跑
               browser = p.chromium.launch()
               page = browser.new_page()
               print(f'正在造訪 {APP_URL} ...')
-              page.goto('$APP_URL', wait_until='networkidle')
-              time.sleep(10) # 待久一點，確保後端真的被喚醒
-              print('網頁已成功加載，WebSocket 應已連線。')
-              browser.close()
+              
+              try:
+                  page.goto('$APP_URL', wait_until='domcontentloaded', timeout=60000)
+                  time.sleep(10) # 等待網頁載入
+                  
+                  # 檢查是否有喚醒按鈕
+                  wake_up_text = 'Yes, get this app back up!'
+                  if page.get_by_text(wake_up_text).is_visible():
+                      print('偵測到休眠按鈕，正在點擊喚醒...')
+                      page.get_by_text(wake_up_text).click()
+                      time.sleep(20) # 點擊後多待一會讓它啟動
+                  else:
+                      print('網頁目前是清醒的，已成功建立連線。')
+                      
+              except Exception as e:
+                  print(f'執行過程中發生異常 (這可能是因為網頁載入過慢): {e}')
+              
+              finally:
+                  browser.close()
+                  print('喚醒程序結束。')
           "
