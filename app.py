@@ -122,6 +122,13 @@ def load_data_v15(ticker):
 # --- 3. 前端介面設計 ---
 try:
     st.sidebar.header("⚙️ 參數設定")
+    
+    # --- 新增：手動強制更新按鈕 ---
+    if st.sidebar.button("🔄 強制抓取最新資料"):
+        st.cache_data.clear()
+        st.sidebar.success("快取已清除，正在載入最新數據！")
+    # ------------------------------
+    
     ticker_choice = st.sidebar.selectbox("選擇標的", ["MSTR", "MARA"])
     df_full = load_data_v15(ticker_choice)
     
