@@ -1,9 +1,12 @@
-name: Super Wake Up (2026 Final Fix)
+name: Eternal Life (Playwright Interactive)
 
 on:
   schedule:
-    - cron: '0 0,12 * * *' 
+    - cron: '0 */4 * * *' # 加強頻率：每 4 小時就去操作一次
   workflow_dispatch: 
+
+env:
+  FORCE_JAVASCRIPT_ACTIONS_TO_NODE24: true
 
 jobs:
   wake_up:
@@ -14,18 +17,13 @@ jobs:
         with:
           python-version: '3.10'
 
-      - name: Install System Dependencies & Playwright
+      - name: Install Playwright
         run: |
-          # 1. 更新系統套件清單 (避免抓不到 lib)
           sudo apt-get update
-          
-          # 2. 安裝 Playwright 工具
           pip install playwright
-          
-          # 3. 使用 sudo 安裝瀏覽器核心與系統依賴 (這是解決 Exit Code 1 的關鍵)
           sudo npx playwright install --with-deps chromium
 
-      - name: Deep Wake Up Service
+      - name: Deep Interactive Wake Up
         run: |
           APP_URL="https://bda-hw2-bhjphiekbzfmgeu6bnksapp.streamlit.app/"
           
@@ -35,27 +33,41 @@ jobs:
 
           try:
               with sync_playwright() as p:
-                  # 以 Headless 模式啟動
-                  browser = p.chromium.launch()
-                  page = browser.new_page()
-                  print(f'正在嘗試連線至: {APP_URL}')
+                  browser = p.chromium.launch(headless=True)
+                  # 模擬真實視窗大小
+                  context = browser.new_context(viewport={'width': 1280, 'height': 720})
+                  page = context.new_page()
                   
-                  # 增加超時寬容度到 90 秒
-                  page.goto('$APP_URL', wait_until='domcontentloaded', timeout=90000)
+                  print(f'正在以真人模式造訪: {APP_URL}')
+                  page.goto('$APP_URL', timeout=120000)
                   time.sleep(15) 
-                  
-                  # 檢查是否有那個睡著的按鈕 (使用更模糊的匹配方式)
-                  btn_text = 'Yes, get this app back up!'
-                  if page.get_by_text(btn_text, exact=False).is_visible():
-                      print('偵測到休眠按鈕，執行強制喚醒點擊...')
-                      page.get_by_text(btn_text, exact=False).click()
-                      time.sleep(30) # 點完後留點時間讓後端跑起來
-                      print('喚醒指令已送出。')
-                  else:
-                      print('網頁運作正常，已成功刷新活躍狀態。')
-                  
+
+                  # 1. 處理休眠按鈕
+                  wake_up_btn = page.get_by_text('Yes, get this app back up!', exact=False)
+                  if wake_up_btn.is_visible():
+                      print('偵測到休眠，執行強制喚醒點擊...')
+                      wake_up_btn.click()
+                      time.sleep(60) # 點完給它一分鐘啟動
+                      page.reload() # 刷新確保進入主畫面
+                      time.sleep(10)
+
+                  # 2. 執行「真人互動」：點擊側邊欄選單
+                  # 嘗試在選單中切換標的（這會觸發 Streamlit 後端重新計算）
+                  try:
+                      print('執行真人互動：嘗試操作側邊欄選單...')
+                      # 找到那個「選擇標的」的下拉選單並點擊
+                      page.locator('div[data-baseweb=\"select\"]').click()
+                      time.sleep(2)
+                      # 選擇另一個選項（例如從 MSTR 切換到 MARA）
+                      page.keyboard.press('ArrowDown')
+                      page.keyboard.press('Enter')
+                      print('✅ 互動成功：已成功切換數據標的！')
+                  except Exception as e:
+                      print(f'互動失敗（可能是網頁還沒載入完）：{e}')
+
+                  time.sleep(5)
+                  print('程序結束，網頁已保持活躍狀態。')
                   browser.close()
           except Exception as e:
-              print(f'連線過程中有小波折，但已完成觸發：{e}')
+              print(f'發生錯誤: {e}')
           "
-          
